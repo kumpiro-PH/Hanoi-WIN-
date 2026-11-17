@@ -174,9 +174,10 @@ def daily_number_for_day(day, history=None):
     return "".join(ordered[:6])
 
 
-def formula_candidates(base_t3, base_b2, next_day, history=None):
+def formula_candidates(base_t3, base_b2, next_day, history=None, daily_override=None):
     trans = get_transformations(base_t3, base_b2)
-    daily = daily_number_for_day(next_day, history)
+    # One canonical Daily value is supplied by the UI for both display and scoring.
+    daily = daily_override if daily_override is not None else daily_number_for_day(next_day, history)
 
     candidates = defaultdict(set)
     candidates["Carry Over"].update(trans["carry_over"])
@@ -318,13 +319,13 @@ def dynamic_weights(df):
     return weights
 
 
-def digit_scores(df, next_day):
+def digit_scores(df, next_day, daily_override=None):
     if df.empty:
         return {str(i): 0.0 for i in range(10)}, {}, "000000"
 
     latest = df.iloc[-1]
     candidates, daily, trans = formula_candidates(
-        latest["top_3"], latest["bottom_2"], next_day, df
+        latest["top_3"], latest["bottom_2"], next_day, df, daily_override
     )
     weights = dynamic_weights(df)
     scores = {str(i): 0.0 for i in range(10)}
@@ -346,12 +347,12 @@ def digit_scores(df, next_day):
     return scores, weights, daily
 
 
-def generate_prediction(df, next_day):
+def generate_prediction(df, next_day, daily_override=None):
     if df.empty:
         return None
 
     latest = df.iloc[-1]
-    scores, weights, daily = digit_scores(df, next_day)
+    scores, weights, daily = digit_scores(df, next_day, daily_override)
     ordered = sorted(scores, key=lambda d: (-scores[d], d))
     den = ordered[0]
     rong = ordered[1:4]
@@ -399,6 +400,11 @@ def generate_prediction(df, next_day):
 
 initialize_csv()
 
+# Canonical in-memory dataset: loaded once per Streamlit rerun and shared by
+# Sidebar diagnostics, prediction, ranking, history, and Daily tab.
+df_desc = load_history().sort_values("dt", ascending=False).reset_index(drop=True)
+df_asc = df_desc.sort_values("dt", ascending=True).reset_index(drop=True)
+
 st.title("🎯 HANOI AI PROFESSIONAL v2.0")
 st.caption("Dynamic Backtest + Formula Accuracy + Weighted Prediction")
 
@@ -410,7 +416,7 @@ with st.sidebar:
     )
 
     # ตรวจสอบฐานข้อมูลที่ Streamlit ใช้ เทียบกับไฟล์ history_hanoi.csv ของ Terminal
-    _diag_df = load_history().sort_values("dt", ascending=True).reset_index(drop=True)
+    _diag_df = df_asc
     st.markdown("**🔎 ตรวจสอบฐานข้อมูลที่กำลังใช้**")
     st.caption(f"ไฟล์ CSV: `{os.path.basename(CSV_FILE)}`")
     st.write(f"จำนวนงวด: **{len(_diag_df)}**")
@@ -420,7 +426,7 @@ with st.sidebar:
         st.write(f"3D: **{_last['top_3']}** | 2D: **{_last['bottom_2']}**")
         st.write(f"Daily Wednesday: **{daily_number_for_day('Wednesday', _diag_df)}**")
 
-    df_current = load_history().sort_values("dt", ascending=False)
+    df_current = df_desc
     csv_bytes = (
         df_current.drop(columns=["dt", "weekday_en"], errors="ignore")
         .to_csv(index=False)
@@ -452,9 +458,6 @@ with st.sidebar:
                     st.error("⚠️ รูปแบบคอลัมน์ในไฟล์ CSV ไม่ถูกต้อง")
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาด: {e}")
-
-df_desc = load_history().sort_values("dt", ascending=False).reset_index(drop=True)
-df_asc = df_desc.sort_values("dt", ascending=True).reset_index(drop=True)
 
 # Tabs หลัก
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -498,7 +501,20 @@ with tab1:
                 f"3 ตัวบน: **`{latest_row['top_3']}`** | 2 ตัวล่าง: **`{latest_row['bottom_2']}`**"
             )
 
-        pred = generate_prediction(df_asc, selected_day)
+        # Compute Daily once from the same canonical dataframe used by Terminal.
+        canonical_daily = daily_number_for_day(selected_day, df_asc)
+        pred = generate_prediction(df_asc, selected_day, daily_override=canonical_daily)
+
+        # Runtime parity check: sidebar and prediction must read the identical value.
+        if pred["daily"] != canonical_daily:
+            st.error(
+                f"Daily mismatch: prediction={pred['daily']} / canonical={canonical_daily}. "
+                "ตรวจสอบไฟล์แอปที่ Deploy ว่าเป็นไฟล์รุ่นล่าสุด"
+            )
+        st.caption(
+            f"Engine check: Daily={canonical_daily} | History={len(df_asc)} งวด | "
+            f"CSV={os.path.basename(CSV_FILE)}"
+        )
 
         st.subheader(f"ผลการวิเคราะห์ประจำวัน {selected_day} (Daily: {pred['daily']})")
 
