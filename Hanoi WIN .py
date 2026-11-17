@@ -12,7 +12,8 @@ st.set_page_config(
     page_title="HANOI AI PROFESSIONAL v2.0", page_icon="🎯", layout="wide"
 )
 
-CSV_FILE = "history_hanoi.csv"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_FILE = os.path.join(BASE_DIR, "history_hanoi.csv")
 MIN_HISTORY_FOR_DYNAMIC_WEIGHT = 10
 RECENT_WINDOW = 30
 
@@ -75,10 +76,10 @@ def initialize_csv():
             ["29/09/2569", "05651", "08389", "651", "89"],
             ["28/09/2569", "77115", "86908", "115", "08"],
         ]
-        pd.DataFrame(
-            initial_data,
-            columns=["date", "special", "first_prize", "top_3", "bottom_2"],
-        ).to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
+        pd.DataFrame(initial_data, columns=[
+            "date", "special", "first_prize", "top_3", "bottom_2"
+        ]).to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
+        print(f"สร้าง {CSV_FILE} เริ่มต้นแล้ว")
 
 
 def load_history():
@@ -128,13 +129,13 @@ def get_transformations(top_3_str, bottom_2_str="00"):
     }
 
     rotations = {t3[1:] + t3[0], t3[2] + t3[:2]}
-    mirror_map = {0: 5, 1: 6, 2: 7, 3: 8, 4: 9, 5: 0, 6: 1, 7: 2, 8: 3, 9: 4}
+    mirror_map = {0: 5, 1: 6, 2: 7, 3: 8, 4: 9,
+                  5: 0, 6: 1, 7: 2, 8: 3, 9: 4}
     mirror = "".join(str(mirror_map[int(x)]) for x in t3)
     shifted = "".join(str((int(x) + 2) % 10) for x in t3)
     doubles = {x * 2 for x in t3}
-    sandwiches = {
-        a_str + b_str + a_str for a_str in t3 for b_str in t3 if a_str != b_str
-    }
+    sandwiches = {a_str + b_str + a_str
+                  for a_str in t3 for b_str in t3 if a_str != b_str}
 
     return {
         "carry_over": carry,
@@ -150,16 +151,21 @@ def get_transformations(top_3_str, bottom_2_str="00"):
 
 
 def daily_number_for_day(day, history=None):
+    """สร้าง Daily Number แบบ Dynamic จากข้อมูลเดิม หากมี history มากพอ.
+    ถ้ายังมีข้อมูลน้อย จะใช้ชุดตั้งต้นจากเวอร์ชันเดิม.
+    """
     base = DEFAULT_DAILY_NUMBERS.get(day, "000000")
     if history is None or len(history) < MIN_HISTORY_FOR_DYNAMIC_WEIGHT:
         return base
 
+    # ใช้ความถี่ digit จากผล 3D+2D ในงวดล่าสุด โดยผสมกับ Daily เดิม
     recent = history.tail(min(RECENT_WINDOW, len(history)))
     freq = Counter()
     for _, row in recent.iterrows():
         freq.update(str(row["top_3"]))
         freq.update(str(row["bottom_2"]))
 
+    # คะแนน = ความถี่ + โบนัสเลขจาก daily เดิม เพื่อไม่ให้ระบบเปลี่ยนแรงเกินไป
     score = {str(i): float(freq[str(i)]) for i in range(10)}
     for d in base:
         score[d] += 1.5
@@ -187,6 +193,7 @@ def formula_candidates(base_t3, base_b2, next_day, history=None):
 
 
 def evaluate_formula(formula, trans, daily, actual_t3, actual_b2):
+    """วัด Hit แบบละเอียด ไม่ใช้กฎ 'มีเลข 1 ตัวก็ Hit'."""
     t3 = zfill_num(actual_t3, 3)
     b2 = zfill_num(actual_b2, 2)
 
@@ -206,17 +213,11 @@ def evaluate_formula(formula, trans, daily, actual_t3, actual_b2):
         return int(any(d in t3 for d in daily)), int(any(d in b2 for d in daily))
     if formula == "Rotation":
         rots = trans["rotations"]
-        return int(any(r == t3 for r in rots)), int(
-            any(set(b2).issubset(set(r)) for r in rots)
-        )
+        return int(any(r == t3 for r in rots)), int(any(set(b2).issubset(set(r)) for r in rots))
     if formula == "Mirror":
-        return int(any(d in t3 for d in trans["mirror"])), int(
-            any(d in b2 for d in trans["mirror"])
-        )
+        return int(any(d in t3 for d in trans["mirror"])), int(any(d in b2 for d in trans["mirror"]))
     if formula == "Shift +2":
-        return int(any(d in t3 for d in trans["shifted"])), int(
-            any(d in b2 for d in trans["shifted"])
-        )
+        return int(any(d in t3 for d in trans["shifted"])), int(any(d in b2 for d in trans["shifted"]))
     if formula == "Double":
         return int(any(t3[i] == t3[i + 1] for i in range(2))), int(b2[0] == b2[1])
     if formula == "Sandwich":
@@ -225,6 +226,7 @@ def evaluate_formula(formula, trans, daily, actual_t3, actual_b2):
 
 
 def exact_pattern_score(formula, trans, daily, actual_t3, actual_b2):
+    """คะแนนเสริม 0-1 สำหรับความตรงของ pattern/ตำแหน่ง."""
     t3 = zfill_num(actual_t3, 3)
     b2 = zfill_num(actual_b2, 2)
 
@@ -236,6 +238,7 @@ def exact_pattern_score(formula, trans, daily, actual_t3, actual_b2):
     if formula == "Shift +2":
         return float(t3 == trans["shifted"]), float(b2 == trans["shifted"][-2:])
     if formula == "Daily 6-Digit":
+        # วัดจำนวน digit ที่อยู่ใน Daily / 3 และ / 2
         return len(set(t3) & set(daily)) / 3.0, len(set(b2) & set(daily)) / 2.0
     return 0.0, 0.0
 
@@ -253,23 +256,19 @@ def backtest_dataframe(df):
         trans = get_transformations(prev["top_3"], prev["bottom_2"])
 
         for formula in FORMULAS:
-            hit3, hit2 = evaluate_formula(
-                formula, trans, daily, actual["top_3"], actual["bottom_2"]
-            )
-            exact3, exact2 = exact_pattern_score(
-                formula, trans, daily, actual["top_3"], actual["bottom_2"]
-            )
-            rows.append(
-                {
-                    "date": actual["date"],
-                    "weekday": day,
-                    "formula": formula,
-                    "hit_3d": hit3,
-                    "hit_2d": hit2,
-                    "exact_3d": exact3,
-                    "exact_2d": exact2,
-                }
-            )
+            hit3, hit2 = evaluate_formula(formula, trans, daily,
+                                          actual["top_3"], actual["bottom_2"])
+            exact3, exact2 = exact_pattern_score(formula, trans, daily,
+                                                 actual["top_3"], actual["bottom_2"])
+            rows.append({
+                "date": actual["date"],
+                "weekday": day,
+                "formula": formula,
+                "hit_3d": hit3,
+                "hit_2d": hit2,
+                "exact_3d": exact3,
+                "exact_2d": exact2,
+            })
     return pd.DataFrame(rows)
 
 
@@ -279,6 +278,7 @@ def formula_ranking(df):
         return pd.DataFrame()
 
     result = []
+    total = bt.groupby("formula").size()
     for formula in FORMULAS:
         x = bt[bt["formula"] == formula]
         n = len(x)
@@ -286,28 +286,23 @@ def formula_ranking(df):
         hit2 = x["hit_2d"].sum()
         avg_exact3 = x["exact_3d"].mean()
         avg_exact2 = x["exact_2d"].mean()
+        # Composite ใช้สำหรับจัดอันดับ ไม่ใช่โอกาสถูกรางวัลจริง
         composite = (
-            0.40 * (hit3 / n)
-            + 0.35 * (hit2 / n)
-            + 0.15 * avg_exact3
-            + 0.10 * avg_exact2
+            0.40 * (hit3 / n) +
+            0.35 * (hit2 / n) +
+            0.15 * avg_exact3 +
+            0.10 * avg_exact2
         ) * 100
-        result.append(
-            {
-                "Formula": formula,
-                "N": n,
-                "3D Hit%": round(hit3 / n * 100, 1),
-                "2D Hit%": round(hit2 / n * 100, 1),
-                "3D Exact%": round(avg_exact3 * 100, 1),
-                "2D Exact%": round(avg_exact2 * 100, 1),
-                "Composite": round(composite, 1),
-            }
-        )
-    return (
-        pd.DataFrame(result)
-        .sort_values("Composite", ascending=False)
-        .reset_index(drop=True)
-    )
+        result.append({
+            "Formula": formula,
+            "N": n,
+            "3D Hit%": round(hit3 / n * 100, 1),
+            "2D Hit%": round(hit2 / n * 100, 1),
+            "3D Exact%": round(avg_exact3 * 100, 1),
+            "2D Exact%": round(avg_exact2 * 100, 1),
+            "Composite": round(composite, 1),
+        })
+    return pd.DataFrame(result).sort_values("Composite", ascending=False).reset_index(drop=True)
 
 
 def dynamic_weights(df):
@@ -317,6 +312,7 @@ def dynamic_weights(df):
 
     weights = {}
     for _, row in ranking.iterrows():
+        # Base 1.0 + performance premium; จำกัดไม่ให้สูตรเดียวครองระบบ
         w = 0.5 + row["Composite"] / 50.0
         weights[row["Formula"]] = max(0.5, min(3.0, w))
     return weights
@@ -338,6 +334,7 @@ def digit_scores(df, next_day):
         for digit in candidates[formula]:
             scores[str(digit)] += w
 
+    # Frequency ล่าสุดเป็นตัวช่วยเล็กน้อย ไม่ให้ history เก่าครองทั้งหมด
     recent = df.tail(min(20, len(df)))
     freq = Counter()
     for _, row in recent.iterrows():
@@ -360,11 +357,13 @@ def generate_prediction(df, next_day):
     rong = ordered[1:4]
     kan = ordered[4:7]
 
+    # 2D เน้น + กลับ
     pairs = []
     for r in rong:
         pairs.extend([den + r, r + den])
     pairs = list(dict.fromkeys(pairs))
 
+    # 3D: สร้างหลายชุดจาก 4 digit แรก แล้วจัดอันดับด้วย digit score
     top4 = ordered[:4]
     triples = []
     for a in top4:
@@ -372,12 +371,11 @@ def generate_prediction(df, next_day):
             for c in top4:
                 if len({a, b, c}) >= 2:
                     triples.append(a + b + c)
-    triples = sorted(
-        set(triples), key=lambda x: -(scores[x[0]] + scores[x[1]] + scores[x[2]])
-    )[:12]
+    triples = sorted(set(triples), key=lambda x: -(scores[x[0]] + scores[x[1]] + scores[x[2]]))[:12]
 
     doubles = [d + d for d in ordered[:4]]
-    sandwiches = [a + b + a for a in ordered[:4] for b in ordered[:4] if a != b][:8]
+    sandwiches = [a + b + a for a in ordered[:4] for b in ordered[:4] if a != b]
+    sandwiches = sandwiches[:8]
 
     return {
         "latest": latest,
@@ -410,6 +408,17 @@ with st.sidebar:
     st.info(
         "บน Streamlit Cloud ข้อมูลจะรีเซ็ตเมื่อแอปปิดตัว แนะนำให้กดดาวน์โหลด CSV เก็บไว้หลังอัปเดตข้อมูล"
     )
+
+    # ตรวจสอบฐานข้อมูลที่ Streamlit ใช้ เทียบกับไฟล์ history_hanoi.csv ของ Terminal
+    _diag_df = load_history().sort_values("dt", ascending=True).reset_index(drop=True)
+    st.markdown("**🔎 ตรวจสอบฐานข้อมูลที่กำลังใช้**")
+    st.caption(f"ไฟล์ CSV: `{os.path.basename(CSV_FILE)}`")
+    st.write(f"จำนวนงวด: **{len(_diag_df)}**")
+    if not _diag_df.empty:
+        _last = _diag_df.iloc[-1]
+        st.write(f"ฐานล่าสุด: **{_last['date']}**")
+        st.write(f"3D: **{_last['top_3']}** | 2D: **{_last['bottom_2']}**")
+        st.write(f"Daily Wednesday: **{daily_number_for_day('Wednesday', _diag_df)}**")
 
     df_current = load_history().sort_values("dt", ascending=False)
     csv_bytes = (
