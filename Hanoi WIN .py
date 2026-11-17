@@ -9,9 +9,7 @@ import streamlit as st
 # ================================================================
 
 st.set_page_config(
-    page_title="HANOI AI PROFESSIONAL v2.0",
-    page_icon="🎯",
-    layout="wide",
+    page_title="HANOI AI PROFESSIONAL v2.0", page_icon="🎯", layout="wide"
 )
 
 CSV_FILE = "history_hanoi.csv"
@@ -406,11 +404,11 @@ initialize_csv()
 st.title("🎯 HANOI AI PROFESSIONAL v2.0")
 st.caption("Dynamic Backtest + Formula Accuracy + Weighted Prediction")
 
-# --- Sidebar: จัดการไฟล์ CSV (Import / Export) ---
+# Sidebar สำหรับจัดการไฟล์ CSV
 with st.sidebar:
     st.header("💾 จัดการฐานข้อมูล CSV")
     st.info(
-        "บน Streamlit Cloud ข้อมูลในไฟล์จะรีเซ็ตเมื่อแอปหลับ แนะนำให้กด **ดาวน์โหลด CSV** เก็บไว้หลังอัปเดตข้อมูล"
+        "บน Streamlit Cloud ข้อมูลจะรีเซ็ตเมื่อแอปปิดตัว แนะนำให้กดดาวน์โหลด CSV เก็บไว้หลังอัปเดตข้อมูล"
     )
 
     df_current = load_history().sort_values("dt", ascending=False)
@@ -446,11 +444,10 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาด: {e}")
 
-# โหลดข้อมูลล่าสุดสำหรับแสดงผล
 df_desc = load_history().sort_values("dt", ascending=False).reset_index(drop=True)
 df_asc = df_desc.sort_values("dt", ascending=True).reset_index(drop=True)
 
-# สร้าง Tabs หลักแทนเมนู CLI
+# Tabs หลัก
 tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "🔮 ทำนายงวดถัดไป",
@@ -461,9 +458,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-# ----------------------------------------------------------------
-# TAB 1: FORWARD PREDICTION
-# ----------------------------------------------------------------
+# ---------------- TAB 1: PREDICTION ----------------
 with tab1:
     if df_asc.empty:
         st.warning("⚠️ ยังไม่มีข้อมูลในระบบ กรุณาเพิ่มข้อมูลที่แท็บ 'อัปเดต / ลบข้อมูล'")
@@ -539,9 +534,7 @@ with tab1:
                 )
                 st.bar_chart(s_df.set_index("Digit"))
 
-# ----------------------------------------------------------------
-# TAB 2: UPDATE / DELETE RESULT
-# ----------------------------------------------------------------
+# ---------------- TAB 2: UPDATE / DELETE ----------------
 with tab2:
     col_add, col_del = st.columns([3, 2])
 
@@ -558,7 +551,7 @@ with tab2:
             if submitted:
                 parsed_dt = parse_thai_date(f_date)
                 if pd.isna(parsed_dt):
-                    st.error("⚠️ รูปแบบวันที่ไม่ถูกต้อง กรุณากรอกเป็น DD/MM/YYYY (เช่น 06/10/2569)")
+                    st.error("⚠️ รูปแบบวันที่ไม่ถูกต้อง กรุณากรอกเป็น DD/MM/YYYY")
                 elif not f_top3.strip() or not f_bot2.strip():
                     st.error("⚠️ กรุณากรอกเลข 3 ตัวบน และ 2 ตัวล่างให้ครบถ้วน")
                 else:
@@ -602,9 +595,7 @@ with tab2:
         else:
             st.info("ไม่มีข้อมูลให้ลบ")
 
-# ----------------------------------------------------------------
-# TAB 3: FORMULA RANKING & BACKTEST
-# ----------------------------------------------------------------
+# ---------------- TAB 3: BACKTEST ----------------
 with tab3:
     st.subheader("📊 Formula Ranking / Backtest")
     if len(df_asc) < 2:
@@ -613,7 +604,7 @@ with tab3:
         ranking_df = formula_ranking(df_asc)
         st.dataframe(ranking_df, use_container_width=True, hide_index=True)
         st.caption(
-            "หมายเหตุ: Hit% คือการมีเลขจากสูตรอยู่ในผลจริง; Exact% เป็นคะแนนความตรงของ pattern ไม่ใช่การรับประกันถูกรางวัล"
+            "หมายเหตุ: Hit% คือการมีเลขจากสูตรอยู่ในผลจริง; Exact% เป็นคะแนนความตรงของ pattern"
         )
 
         st.divider()
@@ -622,17 +613,13 @@ with tab3:
         recent_bt = bt_df.tail(len(FORMULAS) * min(10, max(1, len(df_asc) - 1)))
         st.dataframe(recent_bt, use_container_width=True, hide_index=True)
 
-# ----------------------------------------------------------------
-# TAB 4: HISTORY
-# ----------------------------------------------------------------
+# ---------------- TAB 4: HISTORY ----------------
 with tab4:
     st.subheader(f"📜 ประวัติผลรางวัลทั้งหมด ({len(df_desc)} งวด)")
     cols = ["date", "weekday_en", "special", "first_prize", "top_3", "bottom_2"]
     st.dataframe(df_desc[cols], use_container_width=True, hide_index=True)
 
-# ----------------------------------------------------------------
-# TAB 5: DAILY NUMBERS
-# ----------------------------------------------------------------
+# ---------------- TAB 5: DAILY NUMBERS ----------------
 with tab5:
     st.subheader("📅 ชุดเลขประจำวัน (Daily 6-Digit)")
     days = [
@@ -656,5 +643,5 @@ with tab5:
     st.dataframe(pd.DataFrame(daily_rows), use_container_width=True, hide_index=True)
     st.info(
         f"สถานะปัจจุบัน: มีข้อมูล **{len(df_asc)}** งวด "
-        f"({'เปิดใช้งานโหมด Dynamic สถิติจริงแล้ว' if len(df_asc) >= MIN_HISTORY_FOR_DYNAMIC_WEIGHT else f'ต้องมีข้อมูลครบ {MIN_HISTORY_FOR_DYNAMIC_WEIGHT} งวดขึ้นไปจึงจะปรับเป็น Dynamic อัตโนมัติ'})"
+        f"({'เปิดใช้งานโหมด Dynamic สถิติจริงแล้ว' if len(df_asc) >= MIN_HISTORY_FOR_DYNAMIC_WEIGHT else f'ต้องมีข้อมูลครบ {MIN_HISTORY_FOR_DYNAMIC_WEIGHT} งวดขึ้นไป'})"
     )
