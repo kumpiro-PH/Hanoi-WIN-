@@ -481,7 +481,7 @@ with tab1:
             selected_day = st.selectbox(
                 "เลือกวันของงวดถัดไป",
                 days_list,
-                index=days_list.index(default_day) if default_day in days_list else 0,
+                index=days_list.index("Monday"),
             )
         with col_info:
             st.info(
