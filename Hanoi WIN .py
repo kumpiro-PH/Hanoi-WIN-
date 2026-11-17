@@ -18,7 +18,7 @@ MIN_HISTORY_FOR_DYNAMIC_WEIGHT = 10
 RECENT_WINDOW = 30
 
 DEFAULT_DAILY_NUMBERS = {
-    "Monday": "194286",
+    "Monday": "912460",
     "Tuesday": "194286",
     "Wednesday": "431560",
     "Thursday": "541609",
