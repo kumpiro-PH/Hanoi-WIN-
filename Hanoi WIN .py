@@ -19,7 +19,7 @@ RECENT_WINDOW = 30
 
 # ชุดเลขประจำวันตั้งต้น (คุณสามารถแก้ไขตัวเลขในนี้ได้ตามต้องการ)
 DEFAULT_DAILY_NUMBERS = {
-    "Monday": "194286",
+    "Monday": "104236",
     "Tuesday": "194286",
     "Wednesday": "431560",
     "Thursday": "541609",
